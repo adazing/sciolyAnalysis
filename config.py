@@ -63,7 +63,7 @@ max_events_per_member=4
 Minimum number of events assigned to each member on a team:
     int
 '''
-min_events_per_member=4
+min_events_per_member=2
 
 
 '''
@@ -80,7 +80,7 @@ experience threshold:
     int (number of times that a person must have done an event in order to count their scores for that event)
         ex. 0 (Everyone's scores are counted)
 '''
-experience_threshold=1
+experience_threshold=2
 
 '''
 total experience threshold:

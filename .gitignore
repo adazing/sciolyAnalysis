@@ -1,5 +1,6 @@
 competitions/*
 scioly.model
+grades.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

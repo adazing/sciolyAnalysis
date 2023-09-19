@@ -138,6 +138,44 @@ def display_scores(scores, title):
     # displaying the plotted heatmap
     plt.show()
 
+def is_valid_addition(event, participant, team, experience_data):
+    if participant not in members:
+        return False
+    if experience_data[participant]<5:
+        return False
+    members=set([x for y in team for x in team[y]])
+    member_events={m:{e for e in team if m in team[e]} for m in members}
+    if participant in team[event]: # Participant is already in the event
+        return False
+    if len(members) + len([m for m in required_members if m not in members]) >= max_team_size and participant not in members: # if there are enough members already
+        return False
+    if len(team[event]) >= 2 + int(event in events_with_3_members): # if there are too many members in the event already
+        return False
+    if participant in member_events:
+        if len(member_events[participant])>=max_events_per_member: # if participant is already in the max amount of events
+            return False
+    if grade_distribution!=None:
+        member_grades={row["Name"].replace(" ","_"):row["Grade"] for index, row in pd.read_csv("grades.csv").iterrows()}
+        participant_grade=member_grades[participant]
+        if len([m for m in member_grades if member_grades[m]==participant_grade and m in members])>=grade_distribution[participant_grade]: # too many people in the same grade as the participant
+            return False
+        if participant not in required_members:
+            required_members_grade_dist=[0,0,0,0]
+            for m in required_members:
+                if m not in members:
+                    required_members_grade_dist[member_grades[m]]+=1
+            if not all([grade_distribution[y]-len([x for x in member_grades if member_grades[x]==y and x in members])>required_members_grade_dist[y] for y in range(4)]):
+                return False
+    for m in member_events:
+        conflicts=[0 for x in conflicting_events]
+        for e in member_events[m]:
+            if any([x>=2 for x in conflicts]):
+                return False
+            for x in range(len(conflicting_events)):
+                for e in conflicting_events[x]:
+                    conflicts[x]+=1
+                    break
+                
 if __name__ == "__main__":
     members, events, experience_data, data = process()
     scores = make_scores(model, data,events, members, experience_data)
