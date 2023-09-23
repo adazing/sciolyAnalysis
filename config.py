@@ -47,9 +47,9 @@ required_members=[]
 '''
 Grade distribution:
     None (Any combination)
-    list[(int)#_of_freshmen, (int)#_of_sophomores, (int)#_of_juniors, (int)#_of_seniors] (make sure it adds up to max_team_size or less)
-        ex. [4,5,5,1]
-            -- four freshmen, 5 sophomores, 5 juniors, 1 senior
+    list[(int)min_#_of_freshmen, (int)min_#_of_sophomores, (int)min_#_of_juniors, (int)min_#_of_seniors] (make sure it adds up to max_team_size or less)
+        ex. [4,5,2,1]
+            -- at least 4 freshmen, 5 sophomores, 5 juniors, 1 senior
 '''
 grade_distribution=None
 

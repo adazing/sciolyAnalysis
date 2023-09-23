@@ -5,6 +5,7 @@ import vowpalwabbit
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+import random
 
 model = vowpalwabbit.Workspace("-q :: -f scioly.model --noconstant --l1 1e-6")
 
@@ -139,15 +140,13 @@ def display_scores(scores, title):
     plt.show()
 
 def is_valid_addition(event, participant, team, experience_data):
-    if participant not in members:
+    if sum(experience_data[participant].values())<total_experience_threshold:
         return False
-    if experience_data[participant]<5:
-        return False
-    members=set([x for y in team for x in team[y]])
-    member_events={m:{e for e in team if m in team[e]} for m in members}
+    team_members=set([x for y in team for x in team[y]])
+    member_events={m:{e for e in team if m in team[e]} for m in team_members}
     if participant in team[event]: # Participant is already in the event
         return False
-    if len(members) + len([m for m in required_members if m not in members]) >= max_team_size and participant not in members: # if there are enough members already
+    if len(team_members) + len([m for m in required_members if m not in team_members]) >= max_team_size and participant not in team_members: # if there are enough members already
         return False
     if len(team[event]) >= 2 + int(event in events_with_3_members): # if there are too many members in the event already
         return False
@@ -157,14 +156,23 @@ def is_valid_addition(event, participant, team, experience_data):
     if grade_distribution!=None:
         member_grades={row["Name"].replace(" ","_"):row["Grade"] for index, row in pd.read_csv("grades.csv").iterrows()}
         participant_grade=member_grades[participant]
-        if len([m for m in member_grades if member_grades[m]==participant_grade and m in members])>=grade_distribution[participant_grade]: # too many people in the same grade as the participant
+        num_of_members_with_same_grade_as_participant=0
+        required_members_left_grade_dist = [0,0,0,0]
+        for m in members:
+            if m not in member_grades:
+                member_grades[m]=random.randrange(9, 13)
+            if member_grades[m]==participant_grade:
+                num_of_members_with_same_grade_as_participant += 1
+            elif m in required_members:
+                required_members_left_grade_dist[member_grades[m]-9]+=1
+        
+        # num of members with same grade as participant >= num of free spots left (no specific grade level) + minumum number of members allowed for grade level
+        if num_of_members_with_same_grade_as_participant >= len(team_members)-sum(grade_distribution) + grade_distribution[participant_grade]: # too many people in the same grade as the participant
             return False
-        if participant not in required_members:
-            required_members_grade_dist=[0,0,0,0]
-            for m in required_members:
-                if m not in members:
-                    required_members_grade_dist[member_grades[m]]+=1
-            if not all([grade_distribution[y]-len([x for x in member_grades if member_grades[x]==y and x in members])>required_members_grade_dist[y] for y in range(4)]):
+        if participant not in required_members: # make sure participant doesn't take the place of a required member
+
+            # if for any of the grades, the minumum number of members allowed for grade level + num of free spots left < number of required members need to made room for in that grade level
+            if not all([grade_distribution[y]+len(team_members)-sum(grade_distribution)>required_members_left_grade_dist[y] for y in range(9, 13)]):
                 return False
     for m in member_events:
         conflicts=[0 for x in conflicting_events]
@@ -175,7 +183,7 @@ def is_valid_addition(event, participant, team, experience_data):
                 for e in conflicting_events[x]:
                     conflicts[x]+=1
                     break
-                
+
 if __name__ == "__main__":
     members, events, experience_data, data = process()
     scores = make_scores(model, data,events, members, experience_data)
