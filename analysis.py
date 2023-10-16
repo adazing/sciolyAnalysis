@@ -1,13 +1,9 @@
 from config import *
 import pandas as pd
 import os
-import vowpalwabbit
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-import random
-
-model = vowpalwabbit.Workspace("-q :: -f scioly.model --noconstant --l1 1e-6")
 
 def process():
     #checking formatting of config
@@ -48,10 +44,10 @@ def process():
         raise Exception("total_experience_threshold"+error_msg)
 
     #gathering competition data info
-    members=set() #members in all the competitions so far
-    events=set() #events in all the competitions so far
+    members=[] #members in all the competitions so far
+    events=[] #events in all the competitions so far
     experience_data={}
-    data=np.asarray([])#data to feed into the machine learning model
+    score_data={}
     
     for competition_name in os.listdir("competitions"):
         f = os.path.join("competitions", competition_name)
@@ -63,75 +59,93 @@ def process():
                 break
             else:
                 event_score=float(row.iloc[4])
-                event=row.iloc[0].replace(" ","_")
-                first=row.iloc[1].replace(" ","_")
-                second=row.iloc[2].replace(" ","_")
-                third=row.iloc[3].replace(" ","_") if not pd.isna(row.iloc[3]) else None
-                event_data=str(average_event_rank/num_of_teams_total - event_score/num_of_teams_total)+" | "                
-                events.add(event)
-                members.add(first)
+                event=row.iloc[0]
+                first=row.iloc[1]
+                second=row.iloc[2]
+                third=row.iloc[3] if not pd.isna(row.iloc[3]) else None
+                event_performance=average_event_rank/num_of_teams_total - event_score/num_of_teams_total            
+                events.append(event)
+                members.append(first)
+                
                 if first in experience_data:
                     if event in experience_data[first]:
+                        score_data[first][event]+=event_performance*0.5
                         experience_data[first][event]+=1
                     else:
+                        score_data[first][event]=event_performance*0.5
                         experience_data[first][event]=1
                 else:
+                    score_data[first]={event:event_performance*0.5}
                     experience_data[first]={event:1}
-                members.add(second)
+                    
+                members.append(second)
+                
                 if second in experience_data:
                     if event in experience_data[second]:
+                        score_data[second][event]+=event_performance*0.5
                         experience_data[second][event]+=1
                     else:
+                        score_data[second][event]=event_performance*0.5
                         experience_data[second][event]=1
                 else:
+                    score_data[second]={event : event_performance*0.5}
                     experience_data[second]={event:1}
-                if third==None:
-                    event_data+=first+":0.5 "+second+":0.5 Event:"+event
-                else:
+                if third is not None:
                     if third in experience_data:
                         if event in experience_data[third]:
+                            score_data[third][event]+=event_performance/3
                             experience_data[third][event]+=1
                         else:
+                            score_data[third][event]=event_performance/3
                             experience_data[third][event]=1
                     else:
+                        score_data[third]={event:event_performance/3}
                         experience_data[second]={event:1}
-                    members.add(third)
-                    event_data+=first+":"+str(1/3)+" "+second+":"+str(1/3)+" "+third+":"+str(1/3)+" Event:"+event
-            data=np.append(data, event_data)
+                    members.append(third)
     print(experience_data)
+    print(score_data)
     members=list(members)
     events=list(events)
-    return list(members),list(events),experience_data,data
+    return list(members),list(events),experience_data,score_data
 
-def make_scores(model, data,events, members, experience_data):
-    # print(data)
-    print(experience_data)
-    for i in range(0, 100):
-        for e in data:
-            model.learn(e)
-    scores=[]
-    for e in events:
-        event_data=[]
-        for m in members:
-            prediction=model.predict("| "+m+":1.0 Event:"+e)
-            # print(list(experience_data[m].values()))
-            if sum(list(experience_data[m].values()))<total_experience_threshold:
-                prediction=-1.0
-            elif e in experience_data[m]:
-                if experience_data[m][e]<experience_threshold:
-                    prediction=-1.0
-            elif experience_threshold>=1:
-                prediction=-1.0
-            event_data.append(prediction)
+# def make_scores(model, data,events, members, experience_data):
+#     # print(data)
+#     print(experience_data)
+#     for i in range(0, 100):
+#         for e in data:
+#             model.learn(e)
+#     scores=[]
+#     for e in events:
+#         event_data=[]
+#         for m in members:
+#             prediction=model.predict("| "+m+":1.0 Event:"+e)
+#             # print(list(experience_data[m].values()))
+#             if sum(list(experience_data[m].values()))<total_experience_threshold:
+#                 prediction=-1.0
+#             elif e in experience_data[m]:
+#                 if experience_data[m][e]<experience_threshold:
+#                     prediction=-1.0
+#             elif experience_threshold>=1:
+#                 prediction=-1.0
+#             event_data.append(prediction)
             
-        scores.append(event_data)
-    scores=np.asarray(scores)
-    # print(scores)
-    return scores
+#         scores.append(event_data)
+#     scores=np.asarray(scores)
+#     # print(scores)
+#     return scores
 
-def display_scores(scores, title):
+def display_data(raw_data, title, members, events):
+    # print(members)
+    # print(events)
+    data_min=min([min(raw_data[m].values()) for m in raw_data])
+    data=np.asarray([[data_min]*len(members)]*len(events))
+    # print(data.shape)
+    for m in raw_data:
+        for e in raw_data[m]:
+            data[events.index(e)][members.index(m)]=raw_data[m][e]
+    print(data.shape)
     fig, ax = plt.subplots(figsize=(13,8))         # Sample figsize in inches
-    hm = sns.heatmap(data = scores,xticklabels=members,yticklabels=events, linewidths=1,linecolor="g")
+    hm = sns.heatmap(data = data,xticklabels=members,yticklabels=events, linewidths=1,linecolor="g")
     hm.set_title(title)
     hm.set_ylabel("Events")
     hm.set_xlabel("Members")
@@ -139,52 +153,7 @@ def display_scores(scores, title):
     # displaying the plotted heatmap
     plt.show()
 
-def is_valid_addition(event, participant, team, experience_data):
-    if sum(experience_data[participant].values())<total_experience_threshold:
-        return False
-    team_members=set([x for y in team for x in team[y]])
-    member_events={m:{e for e in team if m in team[e]} for m in team_members}
-    if participant in team[event]: # Participant is already in the event
-        return False
-    if len(team_members) + len([m for m in required_members if m not in team_members]) >= max_team_size and participant not in team_members: # if there are enough members already
-        return False
-    if len(team[event]) >= 2 + int(event in events_with_3_members): # if there are too many members in the event already
-        return False
-    if participant in member_events:
-        if len(member_events[participant])>=max_events_per_member: # if participant is already in the max amount of events
-            return False
-    if grade_distribution!=None:
-        member_grades={row["Name"].replace(" ","_"):row["Grade"] for index, row in pd.read_csv("grades.csv").iterrows()}
-        participant_grade=member_grades[participant]
-        num_of_members_with_same_grade_as_participant=0
-        required_members_left_grade_dist = [0,0,0,0]
-        for m in members:
-            if m not in member_grades:
-                member_grades[m]=random.randrange(9, 13)
-            if member_grades[m]==participant_grade:
-                num_of_members_with_same_grade_as_participant += 1
-            elif m in required_members:
-                required_members_left_grade_dist[member_grades[m]-9]+=1
-        
-        # num of members with same grade as participant >= num of free spots left (no specific grade level) + minumum number of members allowed for grade level
-        if num_of_members_with_same_grade_as_participant >= len(team_members)-sum(grade_distribution) + grade_distribution[participant_grade]: # too many people in the same grade as the participant
-            return False
-        if participant not in required_members: # make sure participant doesn't take the place of a required member
-
-            # if for any of the grades, the minumum number of members allowed for grade level + num of free spots left < number of required members need to made room for in that grade level
-            if not all([grade_distribution[y]+len(team_members)-sum(grade_distribution)>required_members_left_grade_dist[y] for y in range(9, 13)]):
-                return False
-    for m in member_events:
-        conflicts=[0 for x in conflicting_events]
-        for e in member_events[m]:
-            if any([x>=2 for x in conflicts]):
-                return False
-            for x in range(len(conflicting_events)):
-                for e in conflicting_events[x]:
-                    conflicts[x]+=1
-                    break
-
 if __name__ == "__main__":
-    members, events, experience_data, data = process()
-    scores = make_scores(model, data,events, members, experience_data)
-    display_scores(scores, "Scores")
+    members, events, experience_data, score_data = process()
+    # scores = make_scores(model, data,events, members, experience_data)
+    display_data(score_data, "Scores", members, events)
